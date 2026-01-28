@@ -1,0 +1,10 @@
+{
+  "webSocketPort": 8080,
+  "baiduFaceModelPath": "D:\\face-native",
+  "baiduFaceDbDefaultGroup": "group",
+  "dbUrl": "jdbc:mysql://localhost:3306/rfidcabinet?useSSL=false&serverTimezone=UTC",
+  "faceImagePath": "D:\\static\\face\\faces",
+  "dbUsername": "root",
+  "dbPassword": "123456",
+  "webSocketPath": "/ws"
+}
