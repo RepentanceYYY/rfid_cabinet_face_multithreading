@@ -143,7 +143,7 @@ public class FaceHandler {
             MatOfByte matOfByte = new MatOfByte(bytes);
             rgbMat = Imgcodecs.imdecode(matOfByte, Imgcodecs.IMREAD_COLOR);
 //            // 1. 确认 Mat 数据
-            System.out.println(rgbMat.rows() + "x" + rgbMat.cols() + ", type=" + rgbMat.type());
+            System.out.println("原始尺寸：" + rgbMat.rows() + "x" + rgbMat.cols() + ", 通道=" + rgbMat.channels());
 //            // 2. 可选：resize/转换成模型期望尺寸
             // Mat resizedMat = new Mat();
             // Imgproc.resize(rgbMat, resizedMat, new Size(100, 100));
