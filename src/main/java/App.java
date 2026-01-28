@@ -1,9 +1,6 @@
-import com.jni.face.Face;
 import config.SystemConfig;
-import handler.FaceHandler;
-import manager.FaceApiManager;
+import handler.manager.FaceApiManager;
 import server.WebSocketServer;
-import utils.FileUtils;
 
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriter;

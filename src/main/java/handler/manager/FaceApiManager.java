@@ -1,10 +1,9 @@
-package manager;
+package handler.manager;
 
 import com.alibaba.fastjson2.JSONObject;
 import com.jni.face.Face;
 import config.SystemConfig;
 import entity.FaceResult;
-import entity.Reply;
 import handler.FaceHandler;
 import utils.FileUtils;
 
@@ -15,7 +14,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class FaceApiManager {
-    public static Face api = new Face();
+    public static Face api;
     /**
      * sdk初始化响应码
      */

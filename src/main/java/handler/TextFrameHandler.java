@@ -1,6 +1,5 @@
 package handler;
 
-import com.jni.face.Face;
 import entity.FaceResult;
 import entity.Reply;
 import entity.baidu.FaceRecognitionResponse;
@@ -9,8 +8,8 @@ import com.alibaba.fastjson2.JSONObject;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
-import manager.ConnectionManager;
-import manager.FaceApiManager;
+import handler.manager.ConnectionManager;
+import handler.manager.FaceApiManager;
 
 import java.util.HashMap;
 import java.util.Map;

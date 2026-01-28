@@ -254,22 +254,22 @@ public class FaceDemo {
     public int faceManager() {
         FaceManager manager = new FaceManager();
         // 人脸注册(传图片帧)
-      //  manager.userAddByMat();
+      //  handler.manager.userAddByMat();
         // 人脸注册(传特征值)
          manager.userAdd();
         // 人脸更新
-       // manager.userUpdate();
+       // handler.manager.userUpdate();
        
         // 组操作
         manager.groupManager();
         // 查询用户信息
-       // manager.getUserinfo();
+       // handler.manager.getUserinfo();
         // 查询用户图片
-        // manager.getUserImage();
+        // handler.manager.getUserImage();
         // 用户组列表查询
-        // manager.getUserlist();
+        // handler.manager.getUserlist();
         // 组列表查询
-        // manager.getGrouplist();
+        // handler.manager.getGrouplist();
         // 数据库人脸数量查询
         manager.getDbFaceCount();
         return 0;
