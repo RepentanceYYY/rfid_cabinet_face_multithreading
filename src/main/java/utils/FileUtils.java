@@ -1,7 +1,9 @@
 package utils;
 
-import com.alibaba.fastjson2.JSONObject;
-import com.alibaba.fastjson2.JSONWriter;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import entity.FaceRequest;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -13,7 +15,10 @@ import java.time.format.DateTimeFormatter;
 
 public class FileUtils {
 
-    public static void dumpJSONObjectOnce(String action, JSONObject obj) {
+    private static final ObjectMapper DUMP_MAPPER =
+            new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+
+    public static void dumpRequestOnce(FaceRequest request) {
         File file = new File("D:\\face-native\\rfid_cabinet_face_dump.txt");
 
         if (file.exists()) {
@@ -21,16 +26,13 @@ public class FileUtils {
         }
 
         try (FileWriter writer = new FileWriter(file, false)) {
-            // 1. 获取带毫秒的时间戳
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
 
-            // 2. 写入头部信息
-            writer.write("-------- " + action + " | " + timestamp + " -----------------------");
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
+            writer.write("-------- " + request.getAction() + " | " + timestamp + " -----------------------");
             writer.write(System.lineSeparator());
 
-            // 3. 正确序列化 JSON（使用 Fastjson2 的枚举特性）
-            writer.write(obj.toJSONString(JSONWriter.Feature.PrettyFormat));
-            writer.flush();
+            String prettyJson = DUMP_MAPPER.writeValueAsString(request);
+            writer.write(prettyJson);
 
         } catch (IOException e) {
             e.printStackTrace();

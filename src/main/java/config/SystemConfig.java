@@ -1,7 +1,8 @@
 package config;
 
-import com.alibaba.fastjson2.JSON;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
+import utils.JsonUtils;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -43,15 +44,16 @@ public class SystemConfig {
      * 加载配置
      */
     private static SystemConfig loadConfig() {
+        ObjectMapper mapper = JsonUtils.MAPPER;
         try (InputStream is = SystemConfig.class.getClassLoader()
                 .getResourceAsStream("config/system.json")) {
             if (is == null) {
                 throw new RuntimeException("无法找到 system.json");
             }
-            // 直接传入流进行解析，Fastjson2 内部会处理 JDK 8 的流读取
-            return JSON.parseObject(is, StandardCharsets.UTF_8, SystemConfig.class);
+            return mapper.readValue(is, SystemConfig.class);
         } catch (Exception e) {
             throw new RuntimeException("加载 system.json 失败", e);
         }
     }
+
 }

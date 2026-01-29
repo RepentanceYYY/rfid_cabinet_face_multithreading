@@ -149,7 +149,7 @@ public class Face {
         // 传空为采用默认路径，若想定置化路径，请填写全局路径如：d:\\face （models模型文件夹目录放置后为d:\\face\\models）
         // 若模型文件夹采用定置化路径，则激活文件(license.ini, license.key)也可采用定制化路径放置到该目录如d:\\face\\license
         // 亦可在激活文件默认生成的路径
-         String modelPath ="E:\\LZH\\Baidu_Face_Offline_SDK_Windows_Java_8.4\\face-native";
+         String modelPath ="D:\\face-native";
         int res = api.sdkInit(modelPath);
         if (res != 0) {
             System.out.printf("sdk init fail and error =%d\n", res);

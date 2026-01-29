@@ -1,8 +1,8 @@
 package handler.manager;
 
-import com.alibaba.fastjson2.JSONObject;
 import com.jni.face.Face;
 import config.SystemConfig;
+import entity.FaceRequest;
 import entity.FaceResult;
 import handler.FaceHandler;
 import utils.FileUtils;
@@ -38,6 +38,12 @@ public class FaceApiManager {
             SystemConfig systemConfig = SystemConfig.getInstance();
             api = new Face();
             sdkInitCode = api.sdkInit(systemConfig.getBaiduFaceModelPath());
+            // 获取设备指纹
+            String deviceId = api.getDeviceId();
+            System.out.println("指纹id:" + deviceId);
+            // 获取版本号
+            String ver = api.sdkVersion();
+            System.out.println("sdk版本:" + ver);
             System.out.println("百度人脸SDK初始化结果---> " + getErrorText(sdkInitCode));
             if (sdkInitCode == 0) {
                 FaceHandler.init();
@@ -61,7 +67,7 @@ public class FaceApiManager {
     /**
      * 激活SDK
      */
-    public static FaceResult activateSDK(String actionStr, JSONObject obj) {
+    public static FaceResult activateSDK(FaceRequest req) {
         synchronized (Face.class) {
             if(api !=null){
                 destroy();
@@ -69,20 +75,18 @@ public class FaceApiManager {
             SystemConfig systemConfig = SystemConfig.getInstance();
             File licenseFile = new File(systemConfig.getBaiduFaceModelPath(), "license/license.key");
             if (!licenseFile.exists()) {
-                return FaceResult.fail(actionStr, "找不到证书路径，无法授权");
+                return FaceResult.fail(req.getAction(), "找不到证书路径，无法授权");
             }
-            Object activationCodeObject = obj.get("activationCode");
-            if (activationCodeObject == null || activationCodeObject.toString().trim().length() == 0) {
-                return FaceResult.fail(actionStr, "授权码不能为空");
+            if (req.getActivationCode() == null ||  req.getActivationCode().trim().length() == 0) {
+                return FaceResult.fail(req.getAction(), "授权码不能为空");
             }
-            String activationCode = activationCodeObject.toString().trim();
             FileWriter writer = null;
             try {
                 writer = new FileWriter(licenseFile, false);
-                writer.write(activationCode);
+                writer.write(req.getActivationCode().trim());
                 writer.flush();
             } catch (IOException e) {
-                return FaceResult.fail(actionStr, "激活码写入失败,程序消息:" + e.getMessage());
+                return FaceResult.fail(req.getAction(), "激活码写入失败,程序消息:" + e.getMessage());
             } finally {
                 if (writer != null) {
                     try {
@@ -96,11 +100,11 @@ public class FaceApiManager {
             sdkInitCode = api.sdkInit(systemConfig.getBaiduFaceModelPath());
             if (sdkInitCode != 0) {
                 destroy();
-                return FaceResult.fail(actionStr, getErrorText(sdkInitCode));
+                return FaceResult.fail(req.getAction(), getErrorText(sdkInitCode));
             }
             FaceHandler.init();
             Face.loadDbFace();
-            return FaceResult.success(actionStr, "百度人脸授权成功");
+            return FaceResult.success(req.getAction(), "百度人脸授权成功");
         }
     }
 

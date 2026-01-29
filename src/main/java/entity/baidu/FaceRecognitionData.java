@@ -1,26 +1,30 @@
 package entity.baidu;
 
-import com.alibaba.fastjson2.annotation.JSONField;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.util.List;
+
 @Data
 public class FaceRecognitionData {
+
     /**
-     * 人脸token
+     * 人脸 token
      */
-    @JSONField(name = "face_token")
+    @JsonProperty("face_token")
     private String faceToken;
-    @JSONField(name = "log_id")
+
+    @JsonProperty("log_id")
     private String logId;
+
     /**
      * 识别结果数量
      */
-    @JSONField(name = "result_num")
+    @JsonProperty("result_num")
     private int resultNum;
+
     /**
      * 结果数组
      */
-
     private List<FaceRecognitionResult> result;
 }

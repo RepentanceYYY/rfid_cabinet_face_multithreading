@@ -1,7 +1,6 @@
 package handler;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.jni.face.Face;
 import com.jni.struct.EyeClose;
 import com.jni.struct.FaceBox;
@@ -9,19 +8,17 @@ import com.jni.struct.HeadPose;
 import com.jni.struct.LivenessInfo;
 import config.FaceConfig;
 import config.SystemConfig;
+import entity.FaceRequest;
 import entity.FaceResult;
 import entity.baidu.FaceRecognitionResponse;
 import entity.baidu.FaceRecognitionResult;
 import entity.db.User;
-import handler.manager.FaceApiManager;
-import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
-import org.opencv.core.Size;
 import org.opencv.imgcodecs.Imgcodecs;
-import org.opencv.imgproc.Imgproc;
 import server.UserService;
 import utils.FileUtils;
+import utils.JsonUtils;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -35,32 +32,23 @@ public class FaceHandler {
     /**
      * 人脸采集
      *
-     * @param obj
+     * @param req
      * @return
      */
-    public static FaceResult capture(JSONObject obj) {
+    public static FaceResult capture(FaceRequest req) {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
-        System.out.println("\n进入人脸采集-----"+timestamp+"---------------------\n");
-        FileUtils.dumpJSONObjectOnce("人脸采集",obj);
-        String base64Frame = obj.getString("frame");
-        Object userNameObject = obj.get("userName");
-        String userName = null;
-        if (userNameObject != null) {
-            userName = userNameObject.toString();
-        }
-        Object actionObject = obj.get("action");
-        String actionStr = actionObject.toString();
-        Object checkActionObject = obj.get("checkAction");
+        System.out.println("\n进入人脸采集-----" + timestamp + "---------------------\n");
+        FileUtils.dumpRequestOnce(req);
 
         Mat rawMat = null;
         Mat rgbMat = null;
         try {
-            byte[] bytes = Base64.getDecoder().decode(base64Frame);
+            byte[] bytes = Base64.getDecoder().decode(req.getFrame());
             MatOfByte matOfByte = new MatOfByte(bytes);
             rawMat = Imgcodecs.imdecode(matOfByte, Imgcodecs.IMREAD_COLOR);
 
             if (rawMat == null || rawMat.empty()) {
-                return FaceResult.tip(actionStr, "消息格式错误");
+                return FaceResult.tip(req.getAction(), "消息格式错误");
             }
             rgbMat = rawMat.clone();
 
@@ -74,24 +62,23 @@ public class FaceHandler {
                 // 人脸检测
                 System.out.println("获取人脸检测结果");
                 FaceBox[] faceBoxes = Face.detect(rgbMatAddr, 1);
-                System.out.println("人脸检测结果：" + JSON.toJSONString(faceBoxes));
+                System.out.println("人脸检测结果：" + JsonUtils.MAPPER.writeValueAsString(faceBoxes));
                 // 静默活体检测
                 System.out.println("获取静默活体检测结果");
                 LivenessInfo[] liveInfos = Face.rgbLiveness(rgbMatAddr);
-                System.out.println();
-                System.out.println(JSON.toJSONString(liveInfos));
+                System.out.println(JsonUtils.MAPPER.writeValueAsString(liveInfos));
 
                 if (liveInfos == null || liveInfos.length == 0 || liveInfos[0].box == null) {
-                    return FaceResult.tip(actionStr, "未检测到人脸");
+                    return FaceResult.tip(req.getAction(), "未检测到人脸");
                 }
                 float liveScore = liveInfos[0].livescore;
                 if (liveScore < FaceConfig.liveScoreMin) {
                     System.out.println(String.format("检测到非活体,%.3f", liveScore));
-                    return FaceResult.tip(actionStr, "活体指数太低:" + liveScore);
+                    return FaceResult.tip(req.getAction(), "活体指数太低:" + liveScore);
                 }
                 // 既然检测到了是活体，代表检测到了人脸
                 // 人脸可用性检测(判断是否和其他人脸做绑定了什么的)
-                FaceResult available = availableDetection(rgbMatAddr, userName, actionStr);
+                FaceResult available = availableDetection(rgbMatAddr, req.getUserName(), req.getAction());
                 if (available != null) {
                     return available;
                 }
@@ -99,75 +86,71 @@ public class FaceHandler {
                 System.out.println("获取嘴巴闭合参数");
                 float[] mouthCloseScore = Face.faceMouthClose(rgbMatAddr);
                 // 如果有动作要求，先返回动作要求的结果
-                if (checkActionObject != null) {
+                if (req.getCheckAction() != null) {
                     System.out.println("准备检测动作");
-                    return actionDetection(actionObject.toString(), checkActionObject.toString(), mouthCloseScore, rgbMatAddr);
+                    return actionDetection(req.getAction(), req.getCheckAction(), mouthCloseScore, rgbMatAddr);
                 }
                 // 嘴巴闭合检测
                 if (mouthCloseScore[0] < FaceConfig.mouthCloseScoreMin) {
-                    return FaceResult.tip(actionStr, "请闭合嘴巴");
+                    return FaceResult.tip(req.getAction(), "请闭合嘴巴");
                 }
 
                 // 眼睛闭合检测
                 System.out.println("获取眼睛闭合参数");
                 EyeClose[] eyeCloses = Face.faceEyeClose(rgbMatAddr);
                 if (eyeCloses == null || eyeCloses.length < 1) {
-                    return FaceResult.tip(actionStr, "请睁开眼睛");
+                    return FaceResult.tip(req.getAction(), "请睁开眼睛");
                 }
                 if (eyeCloses[0].leftEyeCloseConf > FaceConfig.eyeCloseMax || eyeCloses[0].rightEyeCloseConf > FaceConfig.eyeCloseMax) {
-                    return FaceResult.tip(actionStr, "请睁开眼睛");
+                    return FaceResult.tip(req.getAction(), "请睁开眼睛");
                 }
 
                 // 人脸模糊度检测
                 System.out.println("获取人脸模糊度");
                 float[] blurList = Face.faceBlur(rgbMatAddr);
                 if (blurList == null || blurList.length == 0) {
-                    return FaceResult.tip(actionStr, "请保持人脸在画面中");
+                    return FaceResult.tip(req.getAction(), "请保持人脸在画面中");
                 }
                 System.out.println("当前模糊度:" + blurList[0]);
                 if (blurList[0] > FaceConfig.blurMax) {
                     System.out.println(String.format("模糊度太高，%.3f", blurList[0]));
-                    return FaceResult.tip(actionStr, "人脸太模糊");
+                    return FaceResult.tip(req.getAction(), "人脸太模糊");
                 }
-                return FaceResult.success(actionStr, "人脸可以使用");
+                return FaceResult.success(req.getAction(), "人脸可以使用");
             }
 
         } catch (Exception e) {
             e.printStackTrace();
-            return FaceResult.fail(actionStr, e.getMessage());
+            return FaceResult.fail(req.getAction(), e.getMessage());
         } finally {
             if (rgbMat != null) rgbMat.release();
             if (rawMat != null) rawMat.release();
             String timestampEnd = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
-            System.out.println("\n离开人脸采集-----"+timestampEnd+"---------------------\n");
+            System.out.println("\n离开人脸采集-----" + timestampEnd + "---------------------\n");
         }
     }
 
     /**
      * 人脸认证
      *
-     * @param obj
+     * @param req
      * @return
      */
-    public static FaceResult auth(JSONObject obj) {
+    public static FaceResult auth(FaceRequest req) {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
-        System.out.println("\n进入人脸认证-----"+timestamp+"---------------------\n");
-        FileUtils.dumpJSONObjectOnce("人脸认证",obj);
-        String base64Frame = obj.getString("frame");
-        Object actionObject = obj.get("action");
-        String actionStr = actionObject.toString();
-        Object checkAction = obj.get("checkAction");
+        System.out.println("\n进入人脸认证-----" + timestamp + "---------------------\n");
+        FileUtils.dumpRequestOnce(req);
 
         Mat rgbMat = null;
         Mat safeMat = null;
 
         try {
-            byte[] bytes = Base64.getDecoder().decode(base64Frame);
+            byte[] bytes = Base64.getDecoder().decode(req.getFrame());
             MatOfByte matOfByte = new MatOfByte(bytes);
             rgbMat = Imgcodecs.imdecode(matOfByte, Imgcodecs.IMREAD_COLOR);
 
             if (rgbMat == null || rgbMat.empty()) {
-                return FaceResult.tip(actionStr, "消息格式错误");
+                return FaceResult.tip(req.getAction(), "消息格式错误");
             }
 
             System.out.println("原始尺寸：" + rgbMat.rows() + "x" + rgbMat.cols() + ", 通道=" + rgbMat.channels());
@@ -183,38 +166,34 @@ public class FaceHandler {
                 // 1 人脸检测
                 System.out.println("获取人脸检测结果");
                 FaceBox[] faceBoxes = Face.detect(addr, 1);
-                System.out.println("人脸检测结果：" + JSON.toJSONString(faceBoxes));
+                System.out.println("人脸检测结果：" + JsonUtils.MAPPER.writeValueAsString(faceBoxes));
 
                 if (faceBoxes == null || faceBoxes.length == 0) {
-                    return FaceResult.tip(actionStr, "未检测到人脸");
+                    return FaceResult.tip(req.getAction(), "未检测到人脸");
                 }
 
                 // 2 静默活体检测
                 System.out.println("获取静默活体检测结果");
                 LivenessInfo[] liveInfos = Face.rgbLiveness(addr);
-                System.out.println(JSON.toJSONString(liveInfos));
+                System.out.println(JsonUtils.MAPPER.writeValueAsString(liveInfos));
 
                 if (liveInfos == null || liveInfos.length == 0 || liveInfos[0].box == null) {
-                    return FaceResult.tip(actionStr, "未检测到活体人脸");
+                    return FaceResult.tip(req.getAction(), "未检测到活体人脸");
                 }
 
                 float liveScore = liveInfos[0].livescore;
                 System.out.println(String.format("活体置信度为:%.3f", liveScore));
 
                 if (liveScore < FaceConfig.liveScoreMin) {
-                    return FaceResult.tip(actionStr, "活体指数太低");
+                    return FaceResult.tip(req.getAction(), "活体指数太低");
                 }
 
                 // 3 动作检测
-                if (checkAction != null) {
+                if (req.getCheckAction() != null) {
                     System.out.println("动作检测，先获取嘴巴闭合度");
                     float[] mouthCloseScore = Face.faceMouthClose(addr);
-                    return actionDetection(
-                            actionStr,
-                            checkAction.toString(),
-                            mouthCloseScore,
-                            addr
-                    );
+                    // 动作检测结果
+                    return actionDetection(req.getAction(), req.getCheckAction(), mouthCloseScore, addr);
                 }
 
                 // 4️ 人脸识别
@@ -224,34 +203,33 @@ public class FaceHandler {
                 String s = Face.identifyWithAllByMat(addr, 0);
                 System.out.println(s);
 
-                FaceRecognitionResponse faceRecognitionResponse =
-                        JSONObject.parseObject(s, FaceRecognitionResponse.class);
+                FaceRecognitionResponse faceRecognitionResponse = JsonUtils.MAPPER.readValue(s, FaceRecognitionResponse.class);
 
                 List<FaceRecognitionResult> results =
                         faceRecognitionResponse.getData().getResult();
 
                 if (results == null || results.isEmpty()) {
-                    return FaceResult.fail(actionStr, "人脸不存在");
+                    return FaceResult.fail(req.getAction(), "人脸不存在");
                 }
 
                 System.out.println("检查人脸是否存在----end");
 
                 FaceRecognitionResult best = results.get(0);
                 if (best.getScore() < FaceConfig.similarity) {
-                    return FaceResult.fail(actionStr, "人脸不存在");
+                    return FaceResult.fail(req.getAction(), "人脸不存在");
                 }
 
                 UserService userService = new UserService();
                 User user = userService.getUserByUserName(best.getUserId());
                 if (user == null) {
-                    return FaceResult.fail(actionStr, "人脸用户数据出现异常，请检查");
+                    return FaceResult.fail(req.getAction(), "人脸用户数据出现异常，请检查");
                 }
 
-                return FaceResult.success(actionStr, "登录成功", user);
+                return FaceResult.success(req.getAction(), "登录成功", user);
             }
 
         } catch (Exception e) {
-            return FaceResult.fail(actionStr, e.getMessage());
+            return FaceResult.fail(req.getAction(), e.getMessage());
         } finally {
             if (safeMat != null) {
                 safeMat.release();
@@ -260,66 +238,60 @@ public class FaceHandler {
                 rgbMat.release();
             }
             String timestampEnd = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
-            System.out.println("\n离开人脸认证-----"+timestampEnd+"---------------------\n");
+            System.out.println("\n离开人脸认证-----" + timestampEnd + "---------------------\n");
         }
     }
 
     /**
      * 人脸注册和更新
      *
-     * @param obj
+     * @param req
      * @return
      */
-    public static FaceResult update(JSONObject obj) {
-        synchronized (Face.class){
+    public static FaceResult update(FaceRequest req) {
+        synchronized (Face.class) {
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
-            System.out.println("\n进入人脸注册和更新-----"+timestamp+"---------------------\n");
-            String base64Frame = obj.getString("frame");
-            Object userNameObject = obj.get("userName");
-            String actionStr = "update";
-            String userName;
-            if (userNameObject == null) {
-                return FaceResult.fail(actionStr, "未提供用户账号");
+            System.out.println("\n进入人脸注册和更新-----" + timestamp + "---------------------\n");
+            if (req.getUserName() == null || req.getUserName().trim().length() == 0) {
+                return FaceResult.fail(req.getAction(), "未提供用户账号");
             }
-            userName = userNameObject.toString();
             Mat rgbMat = null;
             try {
-                byte[] bytes = Base64.getDecoder().decode(base64Frame);
+                byte[] bytes = Base64.getDecoder().decode(req.getFrame());
                 MatOfByte matOfByte = new MatOfByte(bytes);
                 rgbMat = Imgcodecs.imdecode(matOfByte, Imgcodecs.IMREAD_COLOR);
                 if (rgbMat.empty()) {
-                    return FaceResult.fail(actionStr, "未提供人脸图片");
+                    return FaceResult.fail(req.getAction(), "未提供人脸图片");
                 }
                 long rgbMatAddr = rgbMat.getNativeObjAddr();
                 // 静默活体检测
                 LivenessInfo[] liveInfos = Face.rgbLiveness(rgbMatAddr);
                 if (liveInfos == null || liveInfos.length <= 0 || liveInfos[0].box == null) {
-                    return FaceResult.tip(actionStr, "未检测到人脸");
+                    return FaceResult.tip(req.getAction(), "未检测到人脸");
                 }
                 System.out.println("人脸注册");
-                String addResult = Face.userAddByMat(rgbMatAddr, userName, systemConfig.getBaiduFaceDbDefaultGroup(), "notInfo");
+                String addResult = Face.userAddByMat(rgbMatAddr, req.getUserName(), systemConfig.getBaiduFaceDbDefaultGroup(), "notInfo");
                 System.out.println("人脸更新");
-                String updateResult = Face.userUpdate(rgbMatAddr, userName, systemConfig.getBaiduFaceDbDefaultGroup(), "notInfo");
-                return FaceResult.success(actionStr, "人脸更新成功");
+                String updateResult = Face.userUpdate(rgbMatAddr, req.getUserName(), systemConfig.getBaiduFaceDbDefaultGroup(), "notInfo");
+                return FaceResult.success(req.getAction(), "人脸更新成功");
             } catch (Exception e) {
-                return FaceResult.fail(actionStr, "人脸更新失败:" + e.getMessage());
+                return FaceResult.fail(req.getAction(), "人脸更新失败:" + e.getMessage());
             } finally {
                 rgbMat.release();
                 String timestampEnd = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
-                System.out.println("\n离开人脸注册和更新-----"+timestampEnd+"---------------------\n");
+                System.out.println("\n离开人脸注册和更新-----" + timestampEnd + "---------------------\n");
             }
         }
     }
 
-    public static FaceRecognitionResponse faceRecognition(JSONObject obj) {
+    public static FaceRecognitionResponse faceRecognition(FaceRequest req) throws JsonProcessingException {
 
-        synchronized (Face.class){
+        synchronized (Face.class) {
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
-            System.out.println("\n进入faceRecognition-----"+timestamp+"---------------------\n");
+            System.out.println("\n进入faceRecognition-----" + timestamp + "---------------------\n");
             System.out.println("加载人脸库到内存中");
             Face.loadDbFace();
-            String base64 = obj.getString("data");
-            byte[] bytes = Base64.getDecoder().decode(base64);
+            byte[] bytes = Base64.getDecoder().decode(req.getData());
             MatOfByte matOfByte = new MatOfByte(bytes);
             Mat rgbMat = Imgcodecs.imdecode(matOfByte, Imgcodecs.IMREAD_COLOR);
             if (rgbMat.empty()) {
@@ -329,11 +301,11 @@ public class FaceHandler {
             System.out.println("1:N人脸识别");
             String s = Face.identifyWithAllByMat(nativeObjAddr, 0);
             System.out.println("反序列号识别结果");
-            FaceRecognitionResponse faceRecognitionResponse = JSONObject.parseObject(s, FaceRecognitionResponse.class);
+            FaceRecognitionResponse faceRecognitionResponse = JsonUtils.MAPPER.readValue(s, FaceRecognitionResponse.class);
 
             System.out.println(s);
             String timestampEnd = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
-            System.out.println("\n离开faceRecognition-----"+timestampEnd+"---------------------\n");
+            System.out.println("\n离开faceRecognition-----" + timestampEnd + "---------------------\n");
             return faceRecognitionResponse;
         }
     }
@@ -352,7 +324,7 @@ public class FaceHandler {
             Face.loadDbFace();
             System.out.println("1:N对比");
             String identifyResultJson = Face.identifyWithAllByMat(rgbMatAddr, 0);
-            FaceRecognitionResponse faceRecognitionResponse = JSONObject.parseObject(identifyResultJson, FaceRecognitionResponse.class);
+            FaceRecognitionResponse faceRecognitionResponse = JsonUtils.MAPPER.readValue(identifyResultJson, FaceRecognitionResponse.class);
             List<FaceRecognitionResult> faceRecognitionResults = faceRecognitionResponse.getData().getResult();
             if (faceRecognitionResults == null || faceRecognitionResults.size() < 1) {
                 return null;

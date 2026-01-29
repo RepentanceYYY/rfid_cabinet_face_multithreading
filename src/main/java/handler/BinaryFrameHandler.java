@@ -19,7 +19,7 @@ import java.util.Iterator;
 
 public class BinaryFrameHandler extends SimpleChannelInboundHandler<BinaryWebSocketFrame> {
 
-    // ① 客户端发消息
+    // 客户端发消息
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, BinaryWebSocketFrame frame) {
         try {

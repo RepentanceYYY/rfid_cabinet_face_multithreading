@@ -19,8 +19,7 @@ public class App {
         Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpeg");
         while (writers.hasNext()) {
             ImageWriter w = writers.next();
-            System.out.println("JPEG Writer: " + w.getClass().getName());
-            // 如果看到 com.twelvemonkeys.imageio.plugins.jpeg.JPEGImageWriter 就说明成功
+            System.out.println("JPEG 写入器启动成功: " + w.getClass().getName());
         }
         /*  sdk初始化 */
         FaceApiManager.load();
