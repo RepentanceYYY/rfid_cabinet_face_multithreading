@@ -86,6 +86,7 @@ public class FaceHandler {
                     return available;
                 }
                 // 获取到嘴巴闭合参数
+                System.out.println("获取嘴巴闭合参数");
                 float[] mouthCloseScore = Face.faceMouthClose(rgbMatAddr);
                 // 如果有动作要求，先返回动作要求的结果
                 if (checkActionObject != null) {
@@ -97,6 +98,7 @@ public class FaceHandler {
                 }
 
                 // 眼睛闭合检测
+                System.out.println("获取眼睛闭合参数");
                 EyeClose[] eyeCloses = Face.faceEyeClose(rgbMatAddr);
                 if (eyeCloses == null || eyeCloses.length < 1) {
                     return FaceResult.tip(actionStr, "请睁开眼睛");
@@ -159,11 +161,10 @@ public class FaceHandler {
 
             System.out.println("安全图像内存地址：" + addr);
             System.out.println(safeMat.rows() + "x" + safeMat.cols() + ", channels=" + safeMat.channels());
-
-            // ✅ 所有 Face SDK 调用统一加锁
+            // 同步锁
             synchronized (Face.class) {
 
-                // 1️⃣ 人脸检测
+                // 1 人脸检测
                 FaceBox[] faceBoxes = Face.detect(addr, 1);
                 System.out.println("人脸检测结果：" + JSON.toJSONString(faceBoxes));
 
@@ -171,13 +172,13 @@ public class FaceHandler {
                     return FaceResult.tip(actionStr, "未检测到人脸");
                 }
 
-                // 2️⃣ 静默活体检测
+                // 2 静默活体检测
                 System.out.println("准备检测活体指数");
                 LivenessInfo[] liveInfos = Face.rgbLiveness(addr);
                 System.out.println(JSON.toJSONString(liveInfos));
 
                 if (liveInfos == null || liveInfos.length == 0 || liveInfos[0].box == null) {
-                    return FaceResult.tip(actionStr, "未检测到人脸");
+                    return FaceResult.tip(actionStr, "未检测到活体人脸");
                 }
 
                 float liveScore = liveInfos[0].livescore;
@@ -187,7 +188,7 @@ public class FaceHandler {
                     return FaceResult.tip(actionStr, "活体指数太低");
                 }
 
-                // 3️⃣ 动作检测
+                // 3 动作检测
                 if (checkAction != null) {
                     float[] mouthCloseScore = Face.faceMouthClose(addr);
                     return actionDetection(
@@ -198,8 +199,8 @@ public class FaceHandler {
                     );
                 }
 
-                // 4️⃣ 人脸识别
-                System.out.println("准备检查人脸是否存在---start");
+                // 4️ 人脸识别
+                System.out.println("检查人脸是否存在---start");
                 Face.loadDbFace();
 
                 String s = Face.identifyWithAllByMat(addr, 0);
@@ -215,7 +216,7 @@ public class FaceHandler {
                     return FaceResult.fail(actionStr, "人脸不存在");
                 }
 
-                System.out.println("准备检查人脸是否存在----end");
+                System.out.println("检查人脸是否存在----end");
 
                 FaceRecognitionResult best = results.get(0);
                 if (best.getScore() < FaceConfig.similarity) {
@@ -347,32 +348,34 @@ public class FaceHandler {
      * @return
      */
     public static FaceResult actionDetection(String action, String checkAction, float[] mouthCloseScore, long rgbMatAddr) {
-        HeadPose[] headPoses = Face.faceHeadPose(rgbMatAddr);
-        if (headPoses == null || headPoses.length == 0) {
-            return FaceResult.tip(action, "检测不到人脸");
-        }
-        if (checkAction.equals("turn_left")) {
-            if (headPoses[0].yaw > 20F) {
-                return FaceResult.comm(action, 202, "动作完成", null);
-            } else {
-                return FaceResult.comm(action, 401, "请左转头", null);
+        synchronized (Face.class) {
+            HeadPose[] headPoses = Face.faceHeadPose(rgbMatAddr);
+            if (headPoses == null || headPoses.length == 0) {
+                return FaceResult.tip(action, "检测不到人脸");
             }
-        }
-        if (checkAction.equals("turn_right")) {
-            if (headPoses[0].yaw < -20F) {
-                return FaceResult.comm(action, 202, "动作完成", null);
-            } else {
-                return FaceResult.comm(action, 401, "请右转头", null);
+            if (checkAction.equals("turn_left")) {
+                if (headPoses[0].yaw > 20F) {
+                    return FaceResult.comm(action, 202, "动作完成", null);
+                } else {
+                    return FaceResult.comm(action, 401, "请左转头", null);
+                }
             }
-        }
-        if (checkAction.equals("open_mouth")) {
-            if (mouthCloseScore[0] < 0.6f) {
-                return FaceResult.comm(action, 202, "动作完成", null);
-            } else {
-                return FaceResult.comm(action, 401, "请张嘴", null);
+            if (checkAction.equals("turn_right")) {
+                if (headPoses[0].yaw < -20F) {
+                    return FaceResult.comm(action, 202, "动作完成", null);
+                } else {
+                    return FaceResult.comm(action, 401, "请右转头", null);
+                }
             }
+            if (checkAction.equals("open_mouth")) {
+                if (mouthCloseScore[0] < 0.6f) {
+                    return FaceResult.comm(action, 202, "动作完成", null);
+                } else {
+                    return FaceResult.comm(action, 401, "请张嘴", null);
+                }
+            }
+            return FaceResult.fail(action, "动作检测失败，请重试");
         }
-        return FaceResult.fail(action, "动作检测失败，请重试");
     }
 
     /**
@@ -384,14 +387,29 @@ public class FaceHandler {
         UserService userService = new UserService();
         Map<String, String> userIdWithFacePath = userService.getUserIdWithFacePath();
         userIdWithFacePath.forEach((userName, facePath) -> {
-            Mat mat = Imgcodecs.imread(facePath);
-            long matAddr = mat.getNativeObjAddr();
-            String res = Face.userAddByMat(matAddr, userName, systemConfig.getBaiduFaceDbDefaultGroup(), "无信息");
-            System.out.println("----------------------------------");
-            System.out.println(res);
-            mat.release();
-            System.out.println("用户名=" + userName + ", 人脸路径=" + facePath);
-            System.out.println("----------------------------------");
+
+            synchronized (Face.class) {
+                Mat rgbMat = Imgcodecs.imread(facePath);
+                Mat safeMat = rgbMat.clone();
+                try {
+                    long addr = safeMat.getNativeObjAddr();
+                    String res = Face.userAddByMat(addr, userName, systemConfig.getBaiduFaceDbDefaultGroup(), "无信息");
+                    System.out.println("----------------------------------");
+                    System.out.println(res);
+                    rgbMat.release();
+                    System.out.println("用户名=" + userName + ", 人脸路径=" + facePath);
+                    System.out.println("----------------------------------");
+                } catch (Exception ex) {
+                    System.out.println("百度人脸数据库新增" + userName + "数据报错" + ex.getMessage());
+                } finally {
+                    if (safeMat != null) {
+                        safeMat.release();
+                    }
+                    if (rgbMat != null) {
+                        rgbMat.release();
+                    }
+                }
+            }
         });
         long endTime = System.currentTimeMillis(); // 结束计时
         long duration = endTime - startTime;
