@@ -18,7 +18,7 @@ public class TextFrameHandler extends SimpleChannelInboundHandler<TextWebSocketF
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, TextWebSocketFrame frame) {
-        System.out.println("Thread [" + Thread.currentThread().getName() + "] handling message...");
+        System.out.println("channelRead0当前所在线程" + Thread.currentThread().getId());
         String originalText = frame.text();
         JSONObject obj = JSONObject.parseObject(originalText);
         String action = obj.getString("action");
