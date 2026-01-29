@@ -78,7 +78,9 @@ public class FaceHandler {
                 // 静默活体检测
                 System.out.println("获取静默活体检测结果");
                 LivenessInfo[] liveInfos = Face.rgbLiveness(rgbMatAddr);
+                System.out.println();
                 System.out.println(JSON.toJSONString(liveInfos));
+
                 if (liveInfos == null || liveInfos.length == 0 || liveInfos[0].box == null) {
                     return FaceResult.tip(actionStr, "未检测到人脸");
                 }
@@ -216,9 +218,9 @@ public class FaceHandler {
                 }
 
                 // 4️ 人脸识别
-                System.out.println("检查人脸是否存在---start");
+                System.out.println("加载人脸库到内存中");
                 Face.loadDbFace();
-
+                System.out.println("检查人脸是否存在---start");
                 String s = Face.identifyWithAllByMat(addr, 0);
                 System.out.println(s);
 
@@ -269,53 +271,71 @@ public class FaceHandler {
      * @return
      */
     public static FaceResult update(JSONObject obj) {
-        String base64Frame = obj.getString("frame");
-        Object userNameObject = obj.get("userName");
-        String actionStr = "update";
-        String userName;
-        if (userNameObject == null) {
-            return FaceResult.fail(actionStr, "未提供用户账号");
-        }
-        userName = userNameObject.toString();
-        Mat rgbMat = null;
-        try {
-            byte[] bytes = Base64.getDecoder().decode(base64Frame);
-            MatOfByte matOfByte = new MatOfByte(bytes);
-            rgbMat = Imgcodecs.imdecode(matOfByte, Imgcodecs.IMREAD_COLOR);
-            if (rgbMat.empty()) {
-                return FaceResult.fail(actionStr, "未提供人脸图片");
+        synchronized (Face.class){
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
+            System.out.println("\n进入人脸注册和更新-----"+timestamp+"---------------------\n");
+            String base64Frame = obj.getString("frame");
+            Object userNameObject = obj.get("userName");
+            String actionStr = "update";
+            String userName;
+            if (userNameObject == null) {
+                return FaceResult.fail(actionStr, "未提供用户账号");
             }
-            long rgbMatAddr = rgbMat.getNativeObjAddr();
-            // 静默活体检测
-            LivenessInfo[] liveInfos = Face.rgbLiveness(rgbMatAddr);
-            if (liveInfos == null || liveInfos.length <= 0 || liveInfos[0].box == null) {
-                return FaceResult.tip(actionStr, "未检测到人脸");
+            userName = userNameObject.toString();
+            Mat rgbMat = null;
+            try {
+                byte[] bytes = Base64.getDecoder().decode(base64Frame);
+                MatOfByte matOfByte = new MatOfByte(bytes);
+                rgbMat = Imgcodecs.imdecode(matOfByte, Imgcodecs.IMREAD_COLOR);
+                if (rgbMat.empty()) {
+                    return FaceResult.fail(actionStr, "未提供人脸图片");
+                }
+                long rgbMatAddr = rgbMat.getNativeObjAddr();
+                // 静默活体检测
+                LivenessInfo[] liveInfos = Face.rgbLiveness(rgbMatAddr);
+                if (liveInfos == null || liveInfos.length <= 0 || liveInfos[0].box == null) {
+                    return FaceResult.tip(actionStr, "未检测到人脸");
+                }
+                System.out.println("人脸注册");
+                String addResult = Face.userAddByMat(rgbMatAddr, userName, systemConfig.getBaiduFaceDbDefaultGroup(), "notInfo");
+                System.out.println("人脸更新");
+                String updateResult = Face.userUpdate(rgbMatAddr, userName, systemConfig.getBaiduFaceDbDefaultGroup(), "notInfo");
+                return FaceResult.success(actionStr, "人脸更新成功");
+            } catch (Exception e) {
+                return FaceResult.fail(actionStr, "人脸更新失败:" + e.getMessage());
+            } finally {
+                rgbMat.release();
+                String timestampEnd = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
+                System.out.println("\n离开人脸注册和更新-----"+timestampEnd+"---------------------\n");
             }
-            String addResult = Face.userAddByMat(rgbMatAddr, userName, systemConfig.getBaiduFaceDbDefaultGroup(), "notInfo");
-            String updateResult = Face.userUpdate(rgbMatAddr, userName, systemConfig.getBaiduFaceDbDefaultGroup(), "notInfo");
-            return FaceResult.success(actionStr, "人脸更新成功");
-        } catch (Exception e) {
-            return FaceResult.fail(actionStr, "人脸更新失败:" + e.getMessage());
-        } finally {
-            rgbMat.release();
         }
     }
 
     public static FaceRecognitionResponse faceRecognition(JSONObject obj) {
-        Face.loadDbFace();
-        String base64 = obj.getString("data");
-        byte[] bytes = Base64.getDecoder().decode(base64);
-        MatOfByte matOfByte = new MatOfByte(bytes);
-        Mat rgbMat = Imgcodecs.imdecode(matOfByte, Imgcodecs.IMREAD_COLOR);
-        if (rgbMat.empty()) {
-            throw new RuntimeException("图片为空");
-        }
-        long nativeObjAddr = rgbMat.getNativeObjAddr();
-        String s = Face.identifyWithAllByMat(nativeObjAddr, 0);
-        FaceRecognitionResponse faceRecognitionResponse = JSONObject.parseObject(s, FaceRecognitionResponse.class);
 
-        System.out.println(s);
-        return faceRecognitionResponse;
+        synchronized (Face.class){
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
+            System.out.println("\n进入faceRecognition-----"+timestamp+"---------------------\n");
+            System.out.println("加载人脸库到内存中");
+            Face.loadDbFace();
+            String base64 = obj.getString("data");
+            byte[] bytes = Base64.getDecoder().decode(base64);
+            MatOfByte matOfByte = new MatOfByte(bytes);
+            Mat rgbMat = Imgcodecs.imdecode(matOfByte, Imgcodecs.IMREAD_COLOR);
+            if (rgbMat.empty()) {
+                throw new RuntimeException("图片为空");
+            }
+            long nativeObjAddr = rgbMat.getNativeObjAddr();
+            System.out.println("1:N人脸识别");
+            String s = Face.identifyWithAllByMat(nativeObjAddr, 0);
+            System.out.println("反序列号识别结果");
+            FaceRecognitionResponse faceRecognitionResponse = JSONObject.parseObject(s, FaceRecognitionResponse.class);
+
+            System.out.println(s);
+            String timestampEnd = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
+            System.out.println("\n离开faceRecognition-----"+timestampEnd+"---------------------\n");
+            return faceRecognitionResponse;
+        }
     }
 
     /**
