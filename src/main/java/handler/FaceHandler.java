@@ -21,7 +21,10 @@ import org.opencv.core.Size;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 import server.UserService;
+import utils.FileUtils;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +39,9 @@ public class FaceHandler {
      * @return
      */
     public static FaceResult capture(JSONObject obj) {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
+        System.out.println("\n进入人脸采集-----"+timestamp+"---------------------\n");
+        FileUtils.dumpJSONObjectOnce("人脸采集",obj);
         String base64Frame = obj.getString("frame");
         Object userNameObject = obj.get("userName");
         String userName = null;
@@ -66,9 +72,11 @@ public class FaceHandler {
 
             synchronized (Face.class) {
                 // 人脸检测
+                System.out.println("获取人脸检测结果");
                 FaceBox[] faceBoxes = Face.detect(rgbMatAddr, 1);
                 System.out.println("人脸检测结果：" + JSON.toJSONString(faceBoxes));
                 // 静默活体检测
+                System.out.println("获取静默活体检测结果");
                 LivenessInfo[] liveInfos = Face.rgbLiveness(rgbMatAddr);
                 System.out.println(JSON.toJSONString(liveInfos));
                 if (liveInfos == null || liveInfos.length == 0 || liveInfos[0].box == null) {
@@ -90,6 +98,7 @@ public class FaceHandler {
                 float[] mouthCloseScore = Face.faceMouthClose(rgbMatAddr);
                 // 如果有动作要求，先返回动作要求的结果
                 if (checkActionObject != null) {
+                    System.out.println("准备检测动作");
                     return actionDetection(actionObject.toString(), checkActionObject.toString(), mouthCloseScore, rgbMatAddr);
                 }
                 // 嘴巴闭合检测
@@ -108,6 +117,7 @@ public class FaceHandler {
                 }
 
                 // 人脸模糊度检测
+                System.out.println("获取人脸模糊度");
                 float[] blurList = Face.faceBlur(rgbMatAddr);
                 if (blurList == null || blurList.length == 0) {
                     return FaceResult.tip(actionStr, "请保持人脸在画面中");
@@ -126,6 +136,8 @@ public class FaceHandler {
         } finally {
             if (rgbMat != null) rgbMat.release();
             if (rawMat != null) rawMat.release();
+            String timestampEnd = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
+            System.out.println("\n离开人脸采集-----"+timestampEnd+"---------------------\n");
         }
     }
 
@@ -136,7 +148,9 @@ public class FaceHandler {
      * @return
      */
     public static FaceResult auth(JSONObject obj) {
-
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
+        System.out.println("\n进入人脸认证-----"+timestamp+"---------------------\n");
+        FileUtils.dumpJSONObjectOnce("人脸认证",obj);
         String base64Frame = obj.getString("frame");
         Object actionObject = obj.get("action");
         String actionStr = actionObject.toString();
@@ -165,6 +179,7 @@ public class FaceHandler {
             synchronized (Face.class) {
 
                 // 1 人脸检测
+                System.out.println("获取人脸检测结果");
                 FaceBox[] faceBoxes = Face.detect(addr, 1);
                 System.out.println("人脸检测结果：" + JSON.toJSONString(faceBoxes));
 
@@ -173,7 +188,7 @@ public class FaceHandler {
                 }
 
                 // 2 静默活体检测
-                System.out.println("准备检测活体指数");
+                System.out.println("获取静默活体检测结果");
                 LivenessInfo[] liveInfos = Face.rgbLiveness(addr);
                 System.out.println(JSON.toJSONString(liveInfos));
 
@@ -190,6 +205,7 @@ public class FaceHandler {
 
                 // 3 动作检测
                 if (checkAction != null) {
+                    System.out.println("动作检测，先获取嘴巴闭合度");
                     float[] mouthCloseScore = Face.faceMouthClose(addr);
                     return actionDetection(
                             actionStr,
@@ -241,6 +257,8 @@ public class FaceHandler {
             if (rgbMat != null) {
                 rgbMat.release();
             }
+            String timestampEnd = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
+            System.out.println("\n离开人脸认证-----"+timestampEnd+"---------------------\n");
         }
     }
 
@@ -310,7 +328,9 @@ public class FaceHandler {
      */
     public static FaceResult availableDetection(long rgbMatAddr, String userName, String action) {
         try {
+            System.out.println("加载人脸库到内存");
             Face.loadDbFace();
+            System.out.println("1:N对比");
             String identifyResultJson = Face.identifyWithAllByMat(rgbMatAddr, 0);
             FaceRecognitionResponse faceRecognitionResponse = JSONObject.parseObject(identifyResultJson, FaceRecognitionResponse.class);
             List<FaceRecognitionResult> faceRecognitionResults = faceRecognitionResponse.getData().getResult();
