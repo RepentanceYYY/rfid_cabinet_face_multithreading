@@ -224,6 +224,9 @@ public class FaceHandler {
                 if (user == null) {
                     return FaceResult.fail(req.getAction(), "人脸用户数据出现异常，请检查");
                 }
+                if(!user.getActive()){
+                    return FaceResult.fail(req.getAction(),"绑定的用户未启用");
+                }
 
                 return FaceResult.success(req.getAction(), "登录成功", user);
             }
