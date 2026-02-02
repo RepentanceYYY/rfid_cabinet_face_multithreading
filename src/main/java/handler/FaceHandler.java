@@ -38,7 +38,7 @@ public class FaceHandler {
     public static FaceResult capture(FaceRequest req) {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
         System.out.println("\n进入人脸采集-----" + timestamp + "---------------------\n");
-        FileUtils.dumpRequestOnce(req);
+        // FileUtils.dumpRequestOnce(req);
 
         Mat rawMat = null;
         Mat rgbMat = null;
@@ -139,7 +139,7 @@ public class FaceHandler {
     public static FaceResult auth(FaceRequest req) {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
         System.out.println("\n进入人脸认证-----" + timestamp + "---------------------\n");
-        FileUtils.dumpRequestOnce(req);
+        // FileUtils.dumpRequestOnce(req);
 
         Mat rgbMat = null;
         Mat safeMat = null;
@@ -222,7 +222,8 @@ public class FaceHandler {
                 UserService userService = new UserService();
                 User user = userService.getUserByUserName(best.getUserId());
                 if (user == null) {
-                    return FaceResult.fail(req.getAction(), "人脸用户数据出现异常，请检查");
+                    Face.userDelete(best.getUserId(),systemConfig.getBaiduFaceDbDefaultGroup());
+                    return FaceResult.fail(req.getAction(), "人脸不存在");
                 }
                 if(!user.getActive()){
                     return FaceResult.fail(req.getAction(),"该用户已被停用");
@@ -338,9 +339,9 @@ public class FaceHandler {
             }
             UserService userService = new UserService();
             User userByUserName = userService.getUserByUserName(best.getUserId());
-            // 如果数据没有出错，是不会返回null的
+            // 如果在人脸库中存在，但是没有和用户绑定，则直接删除人脸库中的数据
             if (userByUserName == null) {
-                return FaceResult.fail(action, "人脸数据出现异常，请检查");
+                Face.userDelete(best.getUserId(),systemConfig.getBaiduFaceDbDefaultGroup());
             }
             if ((userName == null || userName.isEmpty()) && userByUserName.getUserName() != null
                     || (userName != null && !userName.isEmpty() && !userName.equals(userByUserName.getUserName()))) {
