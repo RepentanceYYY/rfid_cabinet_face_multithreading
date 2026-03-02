@@ -1,4 +1,4 @@
-package server;
+package dao;
 
 import config.SystemConfig;
 import entity.db.User;
@@ -9,10 +9,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class UserService {
+public class UserDao {
     private SystemConfig systemConfig;
 
-    public UserService() {
+    public UserDao() {
         try {
             systemConfig = SystemConfig.getInstance();
             Class.forName("com.mysql.cj.jdbc.Driver");

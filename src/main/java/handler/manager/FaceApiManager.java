@@ -2,6 +2,7 @@ package handler.manager;
 
 import com.jni.face.Face;
 import config.SystemConfig;
+import dao.AuthSettingsDao;
 import entity.FaceRequest;
 import entity.FaceResult;
 import handler.FaceHandler;
@@ -36,6 +37,30 @@ public class FaceApiManager {
             FileUtils.deleteDirectory(dir);
             System.out.println("结束--> 删除百度人脸旧数据库");
             SystemConfig systemConfig = SystemConfig.getInstance();
+            AuthSettingsDao authSettingsDao = new AuthSettingsDao();
+            String keyFromDb = authSettingsDao.selectFaceSdkLicenseKey();
+            File licenseFile = new File(systemConfig.getBaiduFaceModelPath(), "license/license.key");
+            if (licenseFile.exists()) {
+                FileWriter writer = null;
+                try {
+                    writer = new FileWriter(licenseFile, false);
+                    if(keyFromDb !=null){
+                        writer.write(keyFromDb.trim());
+                    }
+
+                    writer.flush();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } finally {
+                    if (writer != null) {
+                        try {
+                            writer.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            }
             api = new Face();
             sdkInitCode = api.sdkInit(systemConfig.getBaiduFaceModelPath());
             // 获取设备指纹
@@ -86,7 +111,7 @@ public class FaceApiManager {
                 writer.write(req.getActivationCode().trim());
                 writer.flush();
             } catch (IOException e) {
-                return FaceResult.fail(req.getAction(), "激活码写入失败,程序消息:" + e.getMessage());
+                return FaceResult.fail(req.getAction(), "激活码写入证书失败,程序消息:" + e.getMessage());
             } finally {
                 if (writer != null) {
                     try {
@@ -96,6 +121,13 @@ public class FaceApiManager {
                     }
                 }
             }
+            // 写入数据库
+            AuthSettingsDao authSettingsDao = new AuthSettingsDao();
+            boolean updateDbRes = authSettingsDao.updateFaceSdkLicenseKey(req.getActivationCode().trim());
+            if(!updateDbRes){
+                return FaceResult.fail(req.getAction(),"激活码写入数据库失败");
+            }
+
             api = new Face();
             sdkInitCode = api.sdkInit(systemConfig.getBaiduFaceModelPath());
             if (sdkInitCode != 0) {
@@ -104,7 +136,7 @@ public class FaceApiManager {
             }
             FaceHandler.init();
             Face.loadDbFace();
-            return FaceResult.success(req.getAction(), "百度人脸授权成功");
+            return FaceResult.success(req.getAction(), "百度人脸授权成功",null);
         }
     }
 

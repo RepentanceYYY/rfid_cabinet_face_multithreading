@@ -16,8 +16,7 @@ import entity.db.User;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
 import org.opencv.imgcodecs.Imgcodecs;
-import server.UserService;
-import utils.FileUtils;
+import dao.UserDao;
 import utils.JsonUtils;
 
 import java.time.LocalDateTime;
@@ -219,8 +218,8 @@ public class FaceHandler {
                     return FaceResult.fail(req.getAction(), "人脸不存在");
                 }
 
-                UserService userService = new UserService();
-                User user = userService.getUserByUserName(best.getUserId());
+                UserDao userDao = new UserDao();
+                User user = userDao.getUserByUserName(best.getUserId());
                 if (user == null) {
                     Face.userDelete(best.getUserId(),systemConfig.getBaiduFaceDbDefaultGroup());
                     return FaceResult.fail(req.getAction(), "人脸不存在");
@@ -337,8 +336,8 @@ public class FaceHandler {
             if (best.getScore() < FaceConfig.similarity) {
                 return null;
             }
-            UserService userService = new UserService();
-            User userByUserName = userService.getUserByUserName(best.getUserId());
+            UserDao userDao = new UserDao();
+            User userByUserName = userDao.getUserByUserName(best.getUserId());
             // 如果在人脸库中存在，但是没有和用户绑定，则直接删除人脸库中的数据
             if (userByUserName == null) {
                 Face.userDelete(best.getUserId(),systemConfig.getBaiduFaceDbDefaultGroup());
@@ -400,8 +399,8 @@ public class FaceHandler {
     public static void init() {
         System.out.println("开始--> 重新生成百度人脸数据库");
         long startTime = System.currentTimeMillis();
-        UserService userService = new UserService();
-        Map<String, String> userIdWithFacePath = userService.getUserIdWithFacePath();
+        UserDao userDao = new UserDao();
+        Map<String, String> userIdWithFacePath = userDao.getUserIdWithFacePath();
         userIdWithFacePath.forEach((userName, facePath) -> {
 
             synchronized (Face.class) {
